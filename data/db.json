@@ -14,5 +14,16 @@
       "abhay.23bce7190@vitapstudent.ac.in"
     ]
   },
-  "participants": []
+  "participants": [
+    {
+      "id": "john.21bce1001@vitapstudent.ac.in",
+      "fullName": "John Doe",
+      "email": "john.21bce1001@vitapstudent.ac.in",
+      "registrationNumber": "21BCE1001",
+      "loginTime": "2026-09-10T22:03:56.465Z",
+      "status": "in-progress",
+      "answers": {},
+      "testStartTime": "2026-09-10T22:04:10.682Z"
+    }
+  ]
 }

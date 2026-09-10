@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { StudentRecord } from '../types/contest';
-import { Lock, Unlock, Clock, AlertTriangle, CheckCircle, ShieldAlert, Sparkles, BookOpen, Shuffle } from 'lucide-react';
+import { Lock, Unlock, Clock, AlertTriangle, CheckCircle, ShieldAlert, Sparkles, BookOpen, Shuffle, Maximize2 } from 'lucide-react';
+import { enterBrowserFullscreen } from '../utils/fullscreen';
 
 interface ContestLobbyProps {
   student: StudentRecord;
@@ -16,6 +17,12 @@ export const ContestLobby: React.FC<ContestLobbyProps> = ({
   cutoffMarks
 }) => {
   const [dots, setDots] = useState('');
+
+  const handleStartAssessment = async () => {
+    // Request true browser fullscreen on direct user gesture
+    await enterBrowserFullscreen();
+    onStartTest();
+  };
 
   // Animate waiting dots if test is locked
   useEffect(() => {
@@ -111,19 +118,12 @@ export const ContestLobby: React.FC<ContestLobbyProps> = ({
             {isTestAccessOpen ? (
               <button
                 id="start-assessment-btn"
-                onClick={() => {
-                  try {
-                    if (!document.fullscreenElement) {
-                      document.documentElement.requestFullscreen().catch(() => {});
-                    }
-                  } catch (e) {}
-                  onStartTest();
-                }}
+                onClick={handleStartAssessment}
                 type="button"
-                className="w-full sm:w-auto px-8 py-4 rounded-xl bg-[#2F8D46] hover:bg-[#257338] text-white font-extrabold text-base tracking-wide shadow-lg shadow-emerald-700/20 hover:shadow-xl transition-all cursor-pointer flex items-center justify-center gap-2.5 focus:outline-none focus:ring-4 focus:ring-emerald-500/40"
+                className="w-full sm:w-auto px-8 py-4 rounded-xl bg-[#2F8D46] hover:bg-[#257338] text-white font-extrabold text-base tracking-wide shadow-lg shadow-emerald-700/20 hover:shadow-xl transition-all cursor-pointer flex items-center justify-center gap-2.5 focus:outline-none focus:ring-4 focus:ring-emerald-500/40 active:scale-95"
               >
-                <Clock className="w-5 h-5" />
-                <span>Start Assessment (40 Mins)</span>
+                <Maximize2 className="w-5 h-5" />
+                <span>Start Assessment in Fullscreen</span>
               </button>
             ) : (
               <button

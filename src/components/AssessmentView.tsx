@@ -16,6 +16,11 @@ import {
   ShieldAlert,
   AlertTriangle
 } from 'lucide-react';
+import {
+  isBrowserFullscreenActive,
+  enterBrowserFullscreen,
+  exitBrowserFullscreen
+} from '../utils/fullscreen';
 
 interface AssessmentViewProps {
   questions: Question[];
@@ -45,49 +50,69 @@ export const AssessmentView: React.FC<AssessmentViewProps> = ({
   const [showSubmitModal, setShowSubmitModal] = useState<boolean>(false);
   const [hasTimeExpired, setHasTimeExpired] = useState<boolean>(false);
 
-  // Fullscreen enforcement state
-  const [isInFullscreen, setIsInFullscreen] = useState<boolean>(() => {
-    return Boolean(document.fullscreenElement);
-  });
+  // Fullscreen & Proctoring state
+  const [isInFullscreen, setIsInFullscreen] = useState<boolean>(() => isBrowserFullscreenActive());
   const [fullscreenViolations, setFullscreenViolations] = useState<number>(0);
-  const [hasInitiatedFullscreen, setHasInitiatedFullscreen] = useState<boolean>(false);
+  const [hasInitiatedFullscreen, setHasInitiatedFullscreen] = useState<boolean>(() => isBrowserFullscreenActive());
 
-  // Request fullscreen mode
-  const requestFullScreen = async () => {
-    try {
-      if (!document.fullscreenElement) {
-        await document.documentElement.requestFullscreen();
-      }
+  const handleReEnterFullscreen = async () => {
+    const success = await enterBrowserFullscreen();
+    if (success || isBrowserFullscreenActive()) {
       setIsInFullscreen(true);
       setHasInitiatedFullscreen(true);
-    } catch (err) {
-      console.warn('[Fullscreen] Could not enter fullscreen mode:', err);
+    } else {
+      alert(
+        "Could not enter full screen mode.\n\n" +
+        "Tip: If you have Chrome DevTools Device Toolbar (the phone icon / responsive mode) active, please disable it (Ctrl+Shift+M) so Chrome allows full screen."
+      );
     }
   };
 
-  // Attempt initial fullscreen entry on component mount
+  // Monitor fullscreen & tab visibility changes
   useEffect(() => {
-    requestFullScreen();
-  }, []);
-
-  // Monitor fullscreen change events
-  useEffect(() => {
-    const handleFullscreenChange = () => {
-      const isCurrentlyFullscreen = Boolean(document.fullscreenElement);
-      setIsInFullscreen(isCurrentlyFullscreen);
-
-      // If exiting fullscreen while test is actively running, count violation
-      if (!isCurrentlyFullscreen && hasInitiatedFullscreen && !showSubmitModal) {
+    const checkFullscreen = () => {
+      const active = isBrowserFullscreenActive();
+      setIsInFullscreen(active);
+      if (active) {
+        setHasInitiatedFullscreen(true);
+      } else if (hasInitiatedFullscreen && !showSubmitModal) {
         setFullscreenViolations((prev) => prev + 1);
       }
     };
 
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // Tab switch detected!
+        setIsInFullscreen(false);
+        setFullscreenViolations((prev) => prev + 1);
+      } else {
+        checkFullscreen();
+      }
+    };
+
+    const handleWindowBlur = () => {
+      if (!isBrowserFullscreenActive()) {
+        setIsInFullscreen(false);
+      }
+    };
+
+    document.addEventListener('fullscreenchange', checkFullscreen);
+    document.addEventListener('webkitfullscreenchange', checkFullscreen);
+    document.addEventListener('mozfullscreenchange', checkFullscreen);
+    document.addEventListener('MSFullscreenChange', checkFullscreen);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('blur', handleWindowBlur);
+
+    // Initial check
+    checkFullscreen();
 
     return () => {
-      document.removeEventListener('fullscreenchange', handleFullscreenChange);
-      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('fullscreenchange', checkFullscreen);
+      document.removeEventListener('webkitfullscreenchange', checkFullscreen);
+      document.removeEventListener('mozfullscreenchange', checkFullscreen);
+      document.removeEventListener('MSFullscreenChange', checkFullscreen);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('blur', handleWindowBlur);
     };
   }, [hasInitiatedFullscreen, showSubmitModal]);
 
@@ -96,9 +121,7 @@ export const AssessmentView: React.FC<AssessmentViewProps> = ({
   // Auto-submit when time reaches zero
   const triggerAutoSubmit = useCallback(() => {
     setHasTimeExpired(true);
-    if (document.fullscreenElement) {
-      document.exitFullscreen().catch(() => {});
-    }
+    exitBrowserFullscreen();
     const timeSpent = totalSeconds - secondsRemaining;
     onSubmitAssessment(answers, Math.max(timeSpent, 1), fullscreenViolations);
   }, [totalSeconds, secondsRemaining, answers, fullscreenViolations, onSubmitAssessment]);
@@ -219,9 +242,7 @@ export const AssessmentView: React.FC<AssessmentViewProps> = ({
   // Confirm final submission
   const handleFinalSubmit = () => {
     setShowSubmitModal(false);
-    if (document.fullscreenElement) {
-      document.exitFullscreen().catch(() => {});
-    }
+    exitBrowserFullscreen();
     const timeSpent = totalSeconds - secondsRemaining;
     onSubmitAssessment(answers, Math.max(timeSpent, 1), fullscreenViolations);
   };
@@ -675,7 +696,7 @@ export const AssessmentView: React.FC<AssessmentViewProps> = ({
             <button
               id="enable-fullscreen-btn"
               type="button"
-              onClick={requestFullScreen}
+              onClick={handleReEnterFullscreen}
               className="w-full py-4 px-6 rounded-2xl bg-[#2F8D46] hover:bg-[#257338] text-white font-extrabold text-base shadow-xl shadow-emerald-700/30 hover:shadow-2xl transition-all cursor-pointer flex items-center justify-center gap-2.5 focus:outline-none focus:ring-4 focus:ring-emerald-500/40 active:scale-[0.98]"
             >
               <Maximize2 className="w-5 h-5" />
