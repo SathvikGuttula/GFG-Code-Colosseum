@@ -418,3 +418,4 @@ export const DEFAULT_CUTOFF = 15; // out of 25 (60%)
 export const TOTAL_QUESTIONS_COUNT = 25;
 export const CONTEST_DURATION_MINUTES = 40;
 export const CONTEST_DURATION_SECONDS = 40 * 60;
+

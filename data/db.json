@@ -1,0 +1,18 @@
+{
+  "config": {
+    "contestTitle": "Code Colosseum - DSA Contest",
+    "chapterName": "GeeksforGeeks Student Chapter VIT-AP",
+    "durationMinutes": 40,
+    "isTestAccessOpen": true,
+    "cutoffMarks": 15,
+    "totalQuestions": 25,
+    "adminWhitelist": [
+      "tanishka.25bca7602@vitapstudent.ac.in",
+      "sathvik.24bce7086@vitapstudent.ac.in",
+      "sathvikguttula@gmail.com",
+      "gfg.chapter@vitap.ac.in",
+      "abhay.23bce7190@vitapstudent.ac.in"
+    ]
+  },
+  "participants": []
+}

@@ -19,6 +19,7 @@ import {
   CONTEST_DURATION_MINUTES
 } from './data/dsaQuestions';
 import { getShuffledQuestionsForStudent, isAnswerCorrect } from './utils/shuffler';
+import { contestApi } from './api/contestApi';
 
 export default function App() {
   // Theme state: dark / light
@@ -78,9 +79,11 @@ export default function App() {
     return saved ? Number(saved) : DEFAULT_CUTOFF;
   });
 
+  // Sync cutoff to localStorage and remote server
   const handleUpdateCutoff = (newCutoff: number) => {
     setCutoffMarks(newCutoff);
     localStorage.setItem('gfg_colosseum_cutoff', String(newCutoff));
+    contestApi.updateConfig({ cutoffMarks: newCutoff });
   };
 
   // Test Access Gatekeeper (Controlled live by Admin)
@@ -93,9 +96,26 @@ export default function App() {
     setIsTestAccessOpen((prev) => {
       const next = !prev;
       localStorage.setItem('gfg_test_access_open', String(next));
+      contestApi.updateConfig({ isTestAccessOpen: next });
       return next;
     });
   };
+
+  // Fetch initial contest config from backend
+  useEffect(() => {
+    contestApi.getConfig().then((cfg) => {
+      if (cfg) {
+        if (typeof cfg.isTestAccessOpen === 'boolean') {
+          setIsTestAccessOpen(cfg.isTestAccessOpen);
+          localStorage.setItem('gfg_test_access_open', String(cfg.isTestAccessOpen));
+        }
+        if (typeof cfg.cutoffMarks === 'number') {
+          setCutoffMarks(cfg.cutoffMarks);
+          localStorage.setItem('gfg_colosseum_cutoff', String(cfg.cutoffMarks));
+        }
+      }
+    });
+  }, []);
 
   // Current session state
   const [currentUser, setCurrentUser] = useState<StudentRecord | null>(() => {
@@ -125,6 +145,28 @@ export default function App() {
     localStorage.setItem('gfg_colosseum_is_admin', String(isAdmin));
   }, [currentUser, isAdmin]);
 
+  // Live real-time polling: Admin continuously fetches live participant submissions;
+  // Students poll contest access state
+  useEffect(() => {
+    const syncData = async () => {
+      if (isAdmin) {
+        const remoteParticipants = await contestApi.getAdminParticipants();
+        if (remoteParticipants) {
+          setParticipants(remoteParticipants);
+        }
+      } else if (currentUser && currentUser.status === 'registered') {
+        const cfg = await contestApi.getConfig();
+        if (cfg && typeof cfg.isTestAccessOpen === 'boolean') {
+          setIsTestAccessOpen(cfg.isTestAccessOpen);
+        }
+      }
+    };
+
+    syncData();
+    const interval = setInterval(syncData, 4000);
+    return () => clearInterval(interval);
+  }, [isAdmin, currentUser]);
+
   // Shuffled questions unique to current student
   const studentQuestions: Question[] = useMemo(() => {
     if (!currentUser) return DSA_QUESTIONS;
@@ -133,7 +175,7 @@ export default function App() {
   }, [currentUser]);
 
   // Login Handler (Students and Admins)
-  const handleLogin = (
+  const handleLogin = async (
     fullName: string,
     email: string,
     registrationNumber: string,
@@ -151,14 +193,32 @@ export default function App() {
         answers: {}
       };
       setCurrentUser(adminRecord);
+
+      // Immediately fetch latest participants from backend
+      const remoteParticipants = await contestApi.getAdminParticipants();
+      if (remoteParticipants) {
+        setParticipants(remoteParticipants);
+      }
       return;
     }
 
     setIsAdmin(false);
 
-    // Check if student already exists in participants
-    const existing = participants.find((p) => p.email.toLowerCase() === email.toLowerCase());
+    // Sync student registration to central server
+    const remoteStudent = await contestApi.loginStudent(fullName, email, registrationNumber);
+    if (remoteStudent) {
+      setCurrentUser(remoteStudent);
+      setParticipants((prev) => {
+        const exists = prev.some((p) => p.email.toLowerCase() === remoteStudent.email.toLowerCase());
+        return exists
+          ? prev.map((p) => (p.email.toLowerCase() === remoteStudent.email.toLowerCase() ? remoteStudent : p))
+          : [remoteStudent, ...prev];
+      });
+      return;
+    }
 
+    // Local fallback if server is waking up or offline
+    const existing = participants.find((p) => p.email.toLowerCase() === email.toLowerCase());
     if (!existing) {
       const newRecord: StudentRecord = {
         id: email,
@@ -190,6 +250,8 @@ export default function App() {
     setParticipants((prev) =>
       prev.map((p) => (p.email === currentUser.email ? updatedUser : p))
     );
+
+    contestApi.startTest(currentUser.email);
   };
 
   // Submit Assessment & Evaluation Handler
@@ -267,6 +329,9 @@ export default function App() {
     setParticipants((prev) =>
       prev.map((p) => (p.email === currentUser.email ? completedRecord : p))
     );
+
+    // Sync submission to central backend
+    contestApi.submitAssessment(completedRecord);
   };
 
   // Logout Handler
@@ -281,6 +346,7 @@ export default function App() {
   // Delete individual participant record/log (Admin control)
   const handleDeleteParticipant = (emailOrId: string) => {
     setParticipants((prev) => prev.filter((p) => p.email !== emailOrId && p.id !== emailOrId));
+    contestApi.deleteParticipant(emailOrId);
   };
 
   // Reset all contest records (Admin control)
@@ -288,6 +354,7 @@ export default function App() {
     if (confirm('Are you sure you want to clear all participant contest records? This action cannot be undone.')) {
       setParticipants([]);
       localStorage.removeItem('gfg_colosseum_participants');
+      contestApi.resetData();
     }
   };
 
