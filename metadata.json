@@ -1,0 +1,6 @@
+{
+  "name": "Code Colosseum - GFG Contest Platform",
+  "description": "GeeksforGeeks Chapter Code Colosseum DSA contest platform with student authentication, timed assessment, live admin control, and result qualification tracking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
