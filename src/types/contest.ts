@@ -36,6 +36,7 @@ export interface StudentRecord {
   mcqScore?: number;
   shortScore?: number;
   isQualified?: boolean;
+  fullscreenViolations?: number;
 }
 
 export interface ContestConfig {

@@ -257,7 +257,8 @@ export default function App() {
   // Submit Assessment & Evaluation Handler
   const handleSubmitAssessment = (
     answers: Record<number, StudentAnswer>,
-    timeSpentSeconds: number
+    timeSpentSeconds: number,
+    fullscreenViolations: number = 0
   ) => {
     if (!currentUser) return;
 
@@ -322,6 +323,7 @@ export default function App() {
       mcqScore,
       shortScore,
       isQualified,
+      fullscreenViolations,
       answers
     };
 

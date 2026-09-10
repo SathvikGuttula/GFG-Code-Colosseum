@@ -11,7 +11,10 @@ import {
   HelpCircle,
   Sparkles,
   X,
-  RotateCcw
+  RotateCcw,
+  Maximize2,
+  ShieldAlert,
+  AlertTriangle
 } from 'lucide-react';
 
 interface AssessmentViewProps {
@@ -20,7 +23,11 @@ interface AssessmentViewProps {
   registrationNumber: string;
   durationMinutes?: number;
   initialAnswers?: Record<number, StudentAnswer>;
-  onSubmitAssessment: (answers: Record<number, StudentAnswer>, timeSpentSeconds: number) => void;
+  onSubmitAssessment: (
+    answers: Record<number, StudentAnswer>,
+    timeSpentSeconds: number,
+    fullscreenViolations?: number
+  ) => void;
 }
 
 export const AssessmentView: React.FC<AssessmentViewProps> = ({
@@ -38,14 +45,63 @@ export const AssessmentView: React.FC<AssessmentViewProps> = ({
   const [showSubmitModal, setShowSubmitModal] = useState<boolean>(false);
   const [hasTimeExpired, setHasTimeExpired] = useState<boolean>(false);
 
+  // Fullscreen enforcement state
+  const [isInFullscreen, setIsInFullscreen] = useState<boolean>(() => {
+    return Boolean(document.fullscreenElement);
+  });
+  const [fullscreenViolations, setFullscreenViolations] = useState<number>(0);
+  const [hasInitiatedFullscreen, setHasInitiatedFullscreen] = useState<boolean>(false);
+
+  // Request fullscreen mode
+  const requestFullScreen = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen();
+      }
+      setIsInFullscreen(true);
+      setHasInitiatedFullscreen(true);
+    } catch (err) {
+      console.warn('[Fullscreen] Could not enter fullscreen mode:', err);
+    }
+  };
+
+  // Attempt initial fullscreen entry on component mount
+  useEffect(() => {
+    requestFullScreen();
+  }, []);
+
+  // Monitor fullscreen change events
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const isCurrentlyFullscreen = Boolean(document.fullscreenElement);
+      setIsInFullscreen(isCurrentlyFullscreen);
+
+      // If exiting fullscreen while test is actively running, count violation
+      if (!isCurrentlyFullscreen && hasInitiatedFullscreen && !showSubmitModal) {
+        setFullscreenViolations((prev) => prev + 1);
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+    };
+  }, [hasInitiatedFullscreen, showSubmitModal]);
+
   const currentQuestion: Question = questions[currentIndex] || questions[0];
 
   // Auto-submit when time reaches zero
   const triggerAutoSubmit = useCallback(() => {
     setHasTimeExpired(true);
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    }
     const timeSpent = totalSeconds - secondsRemaining;
-    onSubmitAssessment(answers, Math.max(timeSpent, 1));
-  }, [totalSeconds, secondsRemaining, answers, onSubmitAssessment]);
+    onSubmitAssessment(answers, Math.max(timeSpent, 1), fullscreenViolations);
+  }, [totalSeconds, secondsRemaining, answers, fullscreenViolations, onSubmitAssessment]);
 
   // Countdown timer effect
   useEffect(() => {
@@ -163,8 +219,11 @@ export const AssessmentView: React.FC<AssessmentViewProps> = ({
   // Confirm final submission
   const handleFinalSubmit = () => {
     setShowSubmitModal(false);
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    }
     const timeSpent = totalSeconds - secondsRemaining;
-    onSubmitAssessment(answers, Math.max(timeSpent, 1));
+    onSubmitAssessment(answers, Math.max(timeSpent, 1), fullscreenViolations);
   };
 
   const currentAnswer = answers[currentQuestion.id]?.answer || '';
@@ -576,6 +635,52 @@ export const AssessmentView: React.FC<AssessmentViewProps> = ({
                 <span>Confirm & Submit</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Fullscreen Required Blocking Modal */}
+      {!isInFullscreen && (
+        <div
+          id="fullscreen-blocker-modal"
+          className="fixed inset-0 z-[99999] bg-black/90 backdrop-blur-md flex items-center justify-center p-4 select-none animate-in fade-in duration-200"
+        >
+          <div className="max-w-md w-full bg-white dark:bg-zinc-900 border-2 border-emerald-600/70 dark:border-emerald-500/70 rounded-3xl p-6 sm:p-8 shadow-2xl text-center space-y-6 animate-in zoom-in-95 duration-200">
+            <div className="w-20 h-20 rounded-3xl bg-emerald-100 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 mx-auto flex items-center justify-center shadow-lg shadow-emerald-600/20 animate-bounce">
+              <Maximize2 className="w-10 h-10" />
+            </div>
+
+            <div className="space-y-2">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                <ShieldAlert className="w-3.5 h-3.5" />
+                Fullscreen Mode Required
+              </span>
+              <h2 className="text-xl sm:text-2xl font-black text-zinc-900 dark:text-white tracking-tight">
+                Assessment Locked
+              </h2>
+              <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-300 leading-relaxed">
+                Code Colosseum requires full screen mode throughout the assessment for contest integrity. Exiting full screen temporarily pauses and locks the test.
+              </p>
+            </div>
+
+            {fullscreenViolations > 0 && (
+              <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-200 flex items-center justify-center gap-2">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                <span>
+                  Exits Detected: <strong>{fullscreenViolations}</strong> (Logged for Admin Review)
+                </span>
+              </div>
+            )}
+
+            <button
+              id="enable-fullscreen-btn"
+              type="button"
+              onClick={requestFullScreen}
+              className="w-full py-4 px-6 rounded-2xl bg-[#2F8D46] hover:bg-[#257338] text-white font-extrabold text-base shadow-xl shadow-emerald-700/30 hover:shadow-2xl transition-all cursor-pointer flex items-center justify-center gap-2.5 focus:outline-none focus:ring-4 focus:ring-emerald-500/40 active:scale-[0.98]"
+            >
+              <Maximize2 className="w-5 h-5" />
+              <span>Enable Full Screen & Resume Test</span>
+            </button>
           </div>
         </div>
       )}

@@ -111,7 +111,14 @@ export const ContestLobby: React.FC<ContestLobbyProps> = ({
             {isTestAccessOpen ? (
               <button
                 id="start-assessment-btn"
-                onClick={onStartTest}
+                onClick={() => {
+                  try {
+                    if (!document.fullscreenElement) {
+                      document.documentElement.requestFullscreen().catch(() => {});
+                    }
+                  } catch (e) {}
+                  onStartTest();
+                }}
                 type="button"
                 className="w-full sm:w-auto px-8 py-4 rounded-xl bg-[#2F8D46] hover:bg-[#257338] text-white font-extrabold text-base tracking-wide shadow-lg shadow-emerald-700/20 hover:shadow-xl transition-all cursor-pointer flex items-center justify-center gap-2.5 focus:outline-none focus:ring-4 focus:ring-emerald-500/40"
               >
